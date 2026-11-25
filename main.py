@@ -11,8 +11,13 @@ from audio_processing import (
     pilih_koefisien_mfcc,
     ekstraksi_mfcc_seluruh_frame,
     hitung_mean_std_mfcc,
-    ekstraksi_mel_spectrogram_seluruh_frame
+    ekstraksi_mel_spectrogram_seluruh_frame,
+    hitung_mean_std_mel_spectrogram
 )
+from dataset_loader import ambil_daftar_audio
+from feature_extraction import ekstraksi_fitur_audio 
+from csv_writer import simpan_fitur_csv
+from config import HASIL_DIR
 
 # ==========================================
 # KONFIGURASI DATASET
@@ -315,6 +320,117 @@ def uji_baca_audio():
     print("Jumlah filter per frame :", len(seluruh_mel_spectrogram[0]))
     print("Mel frame pertama    :", seluruh_mel_spectrogram[0])
     print("Mel frame terakhir   :", seluruh_mel_spectrogram[-1])
+
+    # ==========================================
+    # PENGUJIAN MEAN DAN STANDAR DEVIASI MEL-SPECTROGRAM
+    # ==========================================
+
+    mean_mel, std_mel, fitur_mel_spectrogram = hitung_mean_std_mel_spectrogram(
+        seluruh_mel_spectrogram
+    )
+
+    print("\nHASIL MEAN DAN STANDAR DEVIASI MEL-SPECTROGRAM")
+    print("-" * 40)
+    print("Jumlah mean        :", len(mean_mel))
+    print("Jumlah std         :", len(std_mel))
+    print("Jumlah fitur akhir :", len(fitur_mel_spectrogram))
+    print("26 nilai mean     :", mean_mel)
+    print("26 nilai std      :", std_mel)
+    print("52 fitur Mel     :", fitur_mel_spectrogram)
+
+    # ==========================================
+    # PENGUJIAN PEMBACA DATASET
+    # ==========================================
+
+    daftar_audio = ambil_daftar_audio()
+
+    print("\nHASIL PEMBACAAN DATASET")
+    print("-" * 40)
+
+    print("Total file audio :", len(daftar_audio))
+
+    jumlah_per_kelas = {}
+
+    for path_audio, kelas in daftar_audio:
+
+        if kelas not in jumlah_per_kelas:
+            jumlah_per_kelas[kelas] = 0
+
+        jumlah_per_kelas[kelas] += 1
+
+    print("\nJumlah audio per kelas:")
+
+    for kelas, jumlah in jumlah_per_kelas.items():
+        print(kelas, ":", jumlah)
+
+    print("\n5 data pertama:")
+
+    for data in daftar_audio[:5]:
+        print(data)
+
+    print("\n5 data terakhir:")
+
+    for data in daftar_audio[-5:]:
+        print(data)
+
+    # ==========================================
+    # PENGUJIAN EKSTRAKSI FITUR GABUNGAN
+    # ==========================================
+
+    path_audio_uji = os.path.join(
+        DATASET_DIR,
+        "Acoustic_Guitar",
+        "1.wav"
+    )
+
+    fitur_mfcc_uji, fitur_mel_uji = ekstraksi_fitur_audio(
+        path_audio_uji
+    )
+
+    print("\nHASIL EKSTRAKSI FITUR GABUNGAN")
+    print("-" * 40)
+
+    print("Jumlah fitur MFCC :", len(fitur_mfcc_uji))
+    print("Jumlah fitur Mel   :", len(fitur_mel_uji))
+
+    print("\n5 fitur awal MFCC:")
+    print(fitur_mfcc_uji[:5])
+
+    print("\n5 fitur awal Mel-Spectrogram:")
+    print(fitur_mel_uji[:5])
+
+
+    # ==========================================
+    # PENGUJIAN PENYIMPANAN FITUR KE CSV
+    # ==========================================
+
+    data_mfcc = [
+        ["1.wav", "Acoustic_Guitar"] + fitur_mfcc_uji
+    ]
+
+    data_mel = [
+        ["1.wav", "Acoustic_Guitar"] + fitur_mel_uji
+    ]
+
+    path_csv_mfcc = os.path.join(HASIL_DIR, "uji_fitur_mfcc.csv")
+    path_csv_mel = os.path.join(HASIL_DIR, "uji_fitur_mel.csv")
+
+    simpan_fitur_csv(
+        path_csv_mfcc,
+        data_mfcc,
+        "mfcc"
+    )
+
+    simpan_fitur_csv(
+        path_csv_mel,
+        data_mel,
+        "mel"
+    )
+
+    print("\nPENGUJIAN PENYIMPANAN CSV")
+    print("-" * 40)
+    print("CSV MFCC berhasil disimpan :", path_csv_mfcc)
+    print("CSV Mel berhasil disimpan  :", path_csv_mel)
 
 # ==========================================
 # PROGRAM UTAMA

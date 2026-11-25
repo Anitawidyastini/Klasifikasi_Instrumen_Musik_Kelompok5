@@ -127,7 +127,6 @@ def terapkan_window(frames):
 # ==========================================
 # DISCRETE FOURIER TRANSFORM (DFT)
 # ==========================================
-
 def hitung_dft(frame):
 
     N = len(frame)
@@ -136,18 +135,29 @@ def hitung_dft(frame):
     hasil_imajiner = []
     magnitude = []
 
-    # Menghitung DFT pada setengah spektrum
     for k in range(N // 2 + 1):
 
         real = 0.0
         imajiner = 0.0
 
+        sudut = 2 * math.pi * k / N
+
+        cos_delta = math.cos(sudut)
+        sin_delta = math.sin(sudut)
+
+        cos_n = 1.0
+        sin_n = 0.0
+
         for n in range(N):
 
-            sudut = 2 * math.pi * k * n / N
+            real += frame[n] * cos_n
+            imajiner -= frame[n] * sin_n
 
-            real += frame[n] * math.cos(sudut)
-            imajiner -= frame[n] * math.sin(sudut)
+            cos_next = cos_n * cos_delta - sin_n * sin_delta
+            sin_next = sin_n * cos_delta + cos_n * sin_delta
+
+            cos_n = cos_next
+            sin_n = sin_next
 
         hasil_real.append(real)
         hasil_imajiner.append(imajiner)
@@ -160,6 +170,96 @@ def hitung_dft(frame):
 
     return hasil_real, hasil_imajiner, magnitude
 
+
+# ==========================================
+# FAST FOURIER TRANSFORM (FFT) MANUAL
+# ==========================================
+
+def hitung_fft(frame):
+
+    N = len(frame)
+
+    data = [complex(nilai, 0) for nilai in frame]
+
+    # ==========================================
+    # BIT-REVERSAL PERMUTATION
+    # ==========================================
+
+    j = 0
+
+    for i in range(1, N):
+
+        bit = N // 2
+
+        while j & bit:
+            j ^= bit
+            bit //= 2
+
+        j ^= bit
+
+        if i < j:
+            data[i], data[j] = data[j], data[i]
+
+    # ==========================================
+    # FFT RADIX-2 (BUTTERFLY)
+    # ==========================================
+
+    ukuran = 2
+
+    while ukuran <= N:
+
+        setengah = ukuran // 2
+
+        sudut = -2 * math.pi / ukuran
+
+        faktor_cos = math.cos(sudut)
+        faktor_sin = math.sin(sudut)
+
+        for awal in range(0, N, ukuran):
+
+            w = complex(1.0, 0.0)
+
+            for k in range(setengah):
+
+                indeks_atas = awal + k
+                indeks_bawah = indeks_atas + setengah
+
+                nilai_atas = data[indeks_atas]
+                nilai_bawah = data[indeks_bawah] * w
+
+                data[indeks_atas] = nilai_atas + nilai_bawah
+                data[indeks_bawah] = nilai_atas - nilai_bawah
+
+                w = complex(
+                    w.real * faktor_cos - w.imag * faktor_sin,
+                    w.real * faktor_sin + w.imag * faktor_cos
+                )
+
+        ukuran *= 2
+
+    # ==========================================
+    # MENGAMBIL 513 BIN FREKUENSI
+    # ==========================================
+
+    hasil_real = []
+    hasil_imajiner = []
+    magnitude = []
+
+    for k in range(N // 2 + 1):
+
+        real = data[k].real
+        imajiner = data[k].imag
+
+        hasil_real.append(real)
+        hasil_imajiner.append(imajiner)
+
+        nilai_magnitude = math.sqrt(
+            real * real + imajiner * imajiner
+        )
+
+        magnitude.append(nilai_magnitude)
+
+    return hasil_real, hasil_imajiner, magnitude
 
 # ==========================================
 # MEL FILTER BANK
@@ -411,3 +511,97 @@ def ekstraksi_mel_spectrogram_seluruh_frame(frames_window, filter_bank):
         seluruh_mel_spectrogram.append(log_mel)
 
     return seluruh_mel_spectrogram
+
+# ==========================================
+# MEAN DAN STANDAR DEVIASI MEL-SPECTROGRAM
+# ==========================================
+
+def hitung_mean_std_mel_spectrogram(seluruh_mel_spectrogram):
+
+    jumlah_frame = len(seluruh_mel_spectrogram)
+    jumlah_filter = len(seluruh_mel_spectrogram[0])
+
+    mean_mel = []
+    std_mel = []
+
+    for k in range(jumlah_filter):
+
+        # Menghitung mean
+        total = 0.0
+
+        for frame in seluruh_mel_spectrogram:
+            total += frame[k]
+
+        mean = total / jumlah_frame
+        mean_mel.append(mean)
+
+        # Menghitung varians
+        total_varians = 0.0
+
+        for frame in seluruh_mel_spectrogram:
+            selisih = frame[k] - mean
+            total_varians += selisih * selisih
+
+        varians = total_varians / jumlah_frame
+
+        # Menghitung standar deviasi
+        std = math.sqrt(varians)
+
+        std_mel.append(std)
+
+    # Menggabungkan mean dan standar deviasi
+    fitur_mel_spectrogram = mean_mel + std_mel
+
+    return mean_mel, std_mel, fitur_mel_spectrogram
+
+# ==========================================
+# EKSTRAKSI MFCC DAN MEL-SPECTROGRAM BERSAMA
+# ==========================================
+
+def ekstrasi_mfcc_dan_mel_seluruh_frame(
+    frames_window,
+    filter_bank
+):
+    seluruh_mfcc = []
+    seluruh_mel_spectrogram = []
+
+    for frame in frames_window:
+
+        # Menghitung FFT satu kali
+        _, _, magnitude = hitung_fft(frame)
+
+        # Menghitung energi Mel
+        energi_mel = []
+
+        for filter_segitiga in filter_bank:
+
+            energi = 0.0
+
+            for k in range(len(magnitude)):
+
+                energi += magnitude[k] * filter_segitiga[k]
+
+            energi_mel.append(energi)
+
+        # Mengubah energi Mel menjadi Log Mel
+        log_mel = hitung_log_mel(energi_mel)
+
+        # ==========================================
+        # EKSTRAKSI MFCC
+        # ==========================================
+
+        hasil_dct = hitung_dct(log_mel)
+
+        hasil_mfcc = pilih_koefisien_mfcc(
+            hasil_dct
+        )
+
+        seluruh_mfcc.append(hasil_mfcc)
+
+        # ==========================================
+        # EKSTRAKSI MEL-SPECTROGRAM
+        # ==========================================
+
+        seluruh_mel_spectrogram.append(log_mel)
+
+    return seluruh_mfcc, seluruh_mel_spectrogram
